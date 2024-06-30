@@ -48,7 +48,7 @@ static struct {
     std::string Command;
     std::string Flag;
     std::string Section;
-    std::string ConfigFilePath = "~/.config/reb/reb.config";
+    std::string ConfigFilePath = std::getenv("HOME") + "/.config/reb/reb.config"s;
     std::string Config[ConfigValue::__count__] = {""};
 } Context;
 

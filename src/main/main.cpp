@@ -96,11 +96,6 @@ auto reb::Init(char** argv) -> void {
         if (!fs::create_directory("./.reb"))
             REB_PANIC("Cannot create folder: './.reb'")
 
-        if (!fs::exists(Context.ConfigFilePath)) {
-            Context.ConfigFilePath =
-                Context.ProgramName.substr(0, Context.ProgramName.find_last_of('/')) + "/assets/reb.config";
-        }
-
         REB_INFO("Reading global configuration file")
         ReadConfig();
 
@@ -130,7 +125,7 @@ auto reb::Init(char** argv) -> void {
 
             if (ignore) continue;
             if (fs::is_regular_file(fsEntry)) {
-                objectsFile << std::left << std::setw(25) << fs::hash_value(fsEntry) << "\t" << fsEntry.path().string() << "\n";
+                objectsFile << std::left << std::setw(20) << fs::hash_value(fsEntry) << " | " << fsEntry.path().string() << "\n";
             }
         }
 
