@@ -14,41 +14,48 @@ Table of contents:
 REB is a small command line build tool which you can use to build your project and keep track of releases.
 
 ## Configuration
-Before configuring REB you need to include the executable in your lib folder .
-```bash
-./build.sh
-ln -s ./build/reb /usr/lib/reb
-```
+Before using REB, you need to execute `install.sh` to begin the installation
 
 ### Global
-To create a global configuration you just need to create the folder `~/.config/reb` and initialise 
-the folder with `reb init --bare`. Now you can edit your global config file to match your preferences.
+To create a global configuration you just need to edit the models in `~/.config/reb/models`
+```
+~
+L .config
+  L reb
+    L models
+      L model_name_1.config
+      L model_name_2.config
+      L ...
+```
 
 ### Local
-To create a local configuration you just need to cd into your project folder and initialise
-the folder with `reb init [flag] <section>`. Now you can edit your local config file to match your preferences.
+To create a local configuration you just need to cd into your project folder and initialise it
+with `reb init <model_name>`. Now you can edit your model in `.reb/model_name.config`
+```
+/path/to/project
+L .reb
+  L model_name.config
+```
+
 > **Note:** the local config file will be merged into the global one on initialisation, overwriting the global properties
 
 ### Parameters
-| Name         | Value type  | Description                                                           |
-| :----------- | :---------- | :-------------------------------------------------------------------- |
-| **GXX**      | string      | Compiler                                                              |
-| **CXX**      | string      | Compilation command                                                   |
-| **CC**       | string      | Dependencies                                                          |
-| **SOURCE**   | string      | Source folder                                                         |
-| **OBJ**      | string      | Object output folder                                                  |
-| **BUILD**    | string      | Build output folder                                                   |
-| **KEEP_OBJ** | true\|false | Whether to keep or not the object files after compilation             |
-| **AUTO_RUN** | true\|false | Whether to auto start the program after                   compilation |
-| **IGNORE**   | string      | The list of folders and files to ignore                               |
+| Name         | Value type  | Description                                         |
+| :----------- | :---------- | :-------------------------------------------------- |
+| **COMP**     | string      | Compiler to use                                     |
+| **FLAGS**    | string      | Compilation flags                                   |
+| **SOURCE**   | string      | Source folder                                       |
+| **BUILD**    | string      | Build output folder                                 |
+| **AUTO_RUN** | true\|false | Whether to auto start the program after compilation |
+| **IGNORE**   | string      | The list of folders and files to ignore             |
 
 ## Usage
 TODO
 
 ### Commands
-| Name    | Description                               | Parameters                        |
-| :------ | :---------------------------------------- | :-------------------------------- |
-| help    | Display usage informations                | -                                 |
-| init    | Initialise the project's folder           | \[--default\] \<section\>, --bare |
-| run     | Run the compilation                       | \<section\>                       |
-| release | Like run but also make a version snapshot | \<section\> \<version\>           |
+| Name    | Description                      | Parameters        |
+| :------ | :------------------------------- | :---------------- |
+| help    | Display usage informations       | -                 |
+| init    | Initialise the project's folder  | `<model_name>`    |
+| run     | Run the compilation              | `<section_name>`  |
+| snap    | Save a snapshot of source folder | `[snapshot_name]` |

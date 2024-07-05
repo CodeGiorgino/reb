@@ -11,7 +11,6 @@ enum ConfigValue : size_t {
     SOURCE,
     BUILD,
     AUTO_RUN,
-    RECURSIVE,
     IGNORE,
     __count__
 };
@@ -22,7 +21,6 @@ static const std::string ConfigValueMap[ConfigValue::__count__] = {
     "SOURCE",
     "BUILD",
     "AUTO_RUN",
-    "RECURSIVE",
     "IGNORE"
 };
 
