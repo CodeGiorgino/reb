@@ -1,26 +1,40 @@
 #include "config.hpp"
 
-#include <fstream>
-#include <iostream>
+#include <cstddef>
+#include <filesystem>
+#include <utility>
 
 #include "../context/context.hpp"
-#include "../lib/utils.hpp"
 
 namespace reb::config {
 auto ReadConfig() -> void {}
 
-auto GetIgnoreList() -> std::vector<std::string> {
-    std::vector<std::string> ignoreList{".reb/*"};
-    if (reb::context::Context.Config[ConfigValue::IGNORE].empty())
-        return ignoreList;
+auto GetIgnoreList() -> std::vector<fs::path> {
+    auto ignoreList = reb::context::Context.Config[std::to_underlying(ConfigValue::IGNORE)];
+    std::vector<fs::path> retval{fs::current_path() / ".reb"};
+    if (ignoreList.empty()) return retval;
 
-    ignoreList.push_back("");
-    for (const auto& ch : reb::context::Context.Config[ConfigValue::IGNORE])
-        if (ch == ' ')
-            ignoreList.push_back("");
-        else
-            ignoreList[ignoreList.size() - 1] += ch;
-
-    return ignoreList;
+    size_t pos;
+    while ((pos = ignoreList.find(' ')) != std::string::npos) {
+        const auto part = ignoreList.substr(0, pos);
+        ignoreList.erase(0, pos);
+        retval.push_back(fs::current_path() / part);
+    };
+    return retval;
 }
 }  // namespace reb::config
+
+namespace enum_ext {
+    template<typename>
+    constexpr auto to_string(const reb::config::ConfigValue value) -> std::string {
+        return reb::config::ConfigValueMap[std::to_underlying(value)]; 
+    }
+
+    template<typename>
+    constexpr auto from_string(const std::string value) -> std::optional<reb::config::ConfigValue> {
+        for (size_t i = 0; i < std::to_underlying(reb::config::ConfigValue::__count__); ++i)
+            if (value == reb::config::ConfigValueMap[i]) return (reb::config::ConfigValue)i;
+
+        return {};
+    }
+}

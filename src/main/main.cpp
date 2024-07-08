@@ -1,40 +1,55 @@
 #include "main.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <ios>
 #include <iostream>
-#include <regex>
+#include <istream>
+#include <vector>
 
 #include "../config/config.hpp"
 #include "../context/context.hpp"
 #include "../lib/utils.hpp"
 namespace fs = std::filesystem;
 
-auto WriteHashToFile() -> void {
+auto _getSubRepositoriesPath() -> std::vector<fs::path> {
+    std::vector<fs::path> retval{};
+    for (const auto &dirEntry :
+         fs::recursive_directory_iterator(fs::current_path())) {
+        if (dirEntry.is_directory() && dirEntry.path().stem() == ".reb" &&
+            dirEntry.path().parent_path() != fs::current_path())
+            retval.push_back(dirEntry.path().parent_path());
+    }
+
+    return retval;
+}
+
+auto _writeHashToFile() -> void {
     const auto localConfig = fs::current_path() / ".reb";
-    if (!fs::exists(localConfig)) REB_PANIC("not reb initialised")
+    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
 
     const auto hashFile = localConfig / "hash";
     if (fs::exists(hashFile)) fs::rename(hashFile, localConfig / "_hash");
 
-    std::ofstream stream(hashFile, std::ios::binary);
+    std::ofstream stream(hashFile);
+    if (!stream.is_open()) REB_PANIC("cannot open output hash file")
+
+    auto ignoreList = reb::config::GetIgnoreList();
+    for (const auto &ignorePath : _getSubRepositoriesPath())
+        ignoreList.push_back(ignorePath);
+
     for (const auto &dirEntry :
          fs::recursive_directory_iterator(fs::current_path())) {
-        bool skip = false;
-        for (const auto &ignorePath : reb::config::GetIgnoreList()) {
-            if (std::regex_search(dirEntry.path().string().erase(0, fs::current_path().string().length()),
-                                 std::regex(ignorePath, std::regex::grep))) {
-                skip = true;
-                break;
-            }
-        }
-
-        if (skip) continue;
+        if (std::find(ignoreList.begin(), ignoreList.end(),
+                      dirEntry.path().parent_path()) != ignoreList.end() ||
+            std::find(ignoreList.begin(), ignoreList.end(), dirEntry.path()) !=
+                ignoreList.end())
+            continue;
 
         stream << std::hex << std::uppercase << std::setw(16)
-               << fs::hash_value(dirEntry.path()) << " : " << dirEntry.path()
-               << std::endl;
+               << fs::hash_value(dirEntry.path()) << " : "
+               << dirEntry.path().string() << std::endl;
     }
 
     stream.close();
@@ -53,10 +68,26 @@ auto Init(char **argv) -> void {
             fileName == reb::context::Context.Params)
             modelFilePath = dirEntry.path();
 
-    if (modelFilePath.empty()) REB_PANIC("model not found")
+    if (modelFilePath.empty()) REB_PANIC("config model not found")
 
     const auto localConfig = fs::current_path() / ".reb";
-    if (fs::exists(localConfig)) fs::remove_all(localConfig);
+    if (fs::exists(localConfig)) {
+        REB_INFO("already a reb repository")
+
+        char input;
+        while (true) {
+            std::cout << "\33[2K\r"
+                      << "Remove the old configuration? [Y/n]: ";
+            std::cin.get(input);
+
+            if (input == 'n')
+                REB_PANIC("cannot remove the old configuration")
+            else if (input == 'Y')
+                break;
+        };
+
+        fs::remove_all(localConfig);
+    }
 
     if (!fs::create_directory(localConfig))
         REB_PANIC("cannot create .reb folder")
@@ -68,7 +99,7 @@ auto Init(char **argv) -> void {
         REB_PANIC("cannot create snapshot folder")
 
     REB_INFO("writing files' hash");
-    WriteHashToFile();
+    _writeHashToFile();
 }
 
 int main(int argc, char **argv) {
