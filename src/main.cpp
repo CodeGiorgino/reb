@@ -153,6 +153,11 @@ auto _writeHashToFile() -> void {
     stream.close();
 }
 
+auto Help(char **argv) -> void {
+    if (*++argv) REB_ERROR("unexpected parameter provided")
+    REB_USAGE
+}
+
 auto Init(char **argv) -> void {
     if (!*++argv) REB_PANIC("unexpected end of command")
 
@@ -208,6 +213,7 @@ auto Run(char **argv) -> void {
     _writeHashToFile();
 
     REB_INFO("building the project")
+    REB_NOT_IMPLEMENTED("Run()::build")
 }
 
 int main(int argc, char **argv) {
@@ -218,7 +224,7 @@ int main(int argc, char **argv) {
 
     context.Command = *argv;
     if (context.Command == "help")
-        REB_NOT_IMPLEMENTED("Help()")
+        Help(argv);
     else if (context.Command == "init")
         Init(argv);
     else if (context.Command == "run")
