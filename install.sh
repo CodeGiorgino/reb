@@ -3,7 +3,7 @@ set -e
 
 if [ $(id -u) -eq 0 ]
 then
-    echo 'ERROR: cannot run as root'
+    echo -e '\033[31;1mERROR:\033[0m cannot run as root'
     exit 1
 fi
 
@@ -24,7 +24,7 @@ CXX='-Wall -Wextra -std=c++23'
 for f in $(find 'src' -type f -path '*.cpp'); do
     base="$(basename "${f}")"
     dest="obj/${base%.*}.o"
-    echo "INFO: building ${f}"
+    echo -e "\033[33;1mINFO:\033[0m building ${f}"
     $GXX $CXX -c -o "${dest}" "${f}"
 done
 
@@ -34,9 +34,9 @@ $GXX $CXX \
 
 if [ -L '/usr/local/bin/reb' ]
 then
-    echo 'ERROR: cannot create symlink /usr/local/bin/reb: symlink exists'
+    echo -e '\033[31;1mERROR:\033[0m cannot create symlink /usr/local/bin/reb: symlink exists'
     exit 1
 fi
 
-echo 'INFO: creating symlink /usr/local/bin/reb'
+echo -e '\033[33;1mINFO:\033[0m creating symlink /usr/local/bin/reb'
 sudo ln -s "$(pwd)/build/reb" /usr/local/bin/reb

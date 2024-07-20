@@ -15,8 +15,8 @@ namespace reb::utils {
            "\033[1mCOMMANDS:\033[0m\n"                                         \
            "  help                    Show this message\n\n"                   \
            "  init <language>         Initialise the current folder as a reb " \
-           "repository\n\n"                                                    \
-           "                          using the provided language\n"           \
+           "repository\n"                                                      \
+           "                          using the provided language\n\n"         \
            "  run <model_name>        Run the model provided\n\n"              \
            "  snap [snapshot_path]    If no parameter is provided, take a \n"  \
            "                          snapshot of the repository, excluding\n" \
@@ -29,11 +29,8 @@ namespace reb::utils {
 
 #define REB_LINE_POS "\033[4m" << __FILE__ << ":" << __LINE__ << ":\033[0m "
 
-#define REB_INFO(text)                                                 \
-    {                                                                  \
-        std::cout << REB_LINE_POS << "\033[33;1mINFO: \033[0m" << text \
-                  << std::endl;                                        \
-    }
+#define REB_INFO(text) \
+    { std::cout << "\033[33;1mINFO: \033[0m" << text << std::endl; }
 
 #define REB_ERROR(text)                                                 \
     {                                                                   \
