@@ -1,4 +1,6 @@
 #pragma once
+#include <optional>
+#include <string>
 
 namespace reb::utils {
 #define REB_LINE_POS "\033[4m" << __FILE__ << ":" << __LINE__ << ":\033[0m "
@@ -23,3 +25,11 @@ namespace reb::utils {
         exit(1);                                                          \
     }
 }  // namespace reb::utils
+
+namespace enum_ext {
+template <typename T>
+auto to_string(const T value) noexcept -> std::string;
+
+template <typename T>
+auto from_string(const std::string value) noexcept -> std::optional<T>;
+}  // namespace enum_ext
