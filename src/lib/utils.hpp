@@ -18,6 +18,7 @@ namespace reb::utils {
            "repository\n"                                                      \
            "                          using the provided language\n\n"         \
            "  run <model_name>        Run the model provided\n\n"              \
+           "  clean                   Clean the repository\n\n"                \
            "  snap [snapshot_path]    If no parameter is provided, take a \n"  \
            "                          snapshot of the repository, excluding\n" \
            "                          the file in .rebignore.\n"               \

@@ -8,6 +8,8 @@
 
 namespace reb::config {
 enum class ConfigValue : size_t {
+    EXT,
+    NAME,
     COMP,
     FLAGS,
     SOURCE,
@@ -20,7 +22,7 @@ enum class ConfigValue : size_t {
 
 static const std::string
     ConfigValueMap[std::to_underlying(ConfigValue::__count__)] = {
-        "COMP", "FLAGS", "SOURCE", "BUILD", "AUTO_RUN", "RECURSIVE"};
+        "EXT", "NAME", "COMP", "FLAGS", "SOURCE", "BUILD", "AUTO_RUN", "RECURSIVE", ""};
 }  // namespace reb::config
 
 namespace enum_ext {

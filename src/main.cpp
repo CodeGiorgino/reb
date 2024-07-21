@@ -1,10 +1,16 @@
+#include <unistd.h>
+
 #include <algorithm>
+#include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <ios>
 #include <iostream>
 #include <istream>
+#include <iterator>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -16,16 +22,51 @@ namespace fs = std::filesystem;
 
 static reb::context::Context context{};
 
+namespace bool_ext {
+auto from_string(const std::string value) noexcept -> std::optional<bool> {
+    if (value == "true")
+        return true;
+    else if (value == "false")
+        return false;
+    else
+        return {};
+}
+}  // namespace bool_ext
+
+namespace file_ext {
+auto checksum(const fs::path filepath) -> uint32_t {
+    uint32_t checksum = 0;
+    unsigned shift = 0;
+
+    std::ifstream stream(filepath);
+    if (!stream.is_open()) REB_PANIC("cannot open file " << filepath.filename())
+
+    for (uint32_t ch = stream.get(); stream; ch = stream.get()) {
+        checksum += (ch << shift);
+        shift += 8;
+
+        if (shift == 32) shift = 0;
+    }
+
+    return checksum;
+}
+}  // namespace file_ext
+
 auto _readConfig() -> void {
-    std::ifstream stream(fs::current_path() / ".reb/reb.config");
+    const auto localConfig{fs::current_path() / ".reb"};
+    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
+
+    std::ifstream stream(localConfig / "reb.config");
     if (!stream.is_open()) REB_PANIC("cannot open config file");
 
+    size_t linePos{0};
     std::string line;
     bool inSection = false;
     while (std::getline(stream, line)) {
+        linePos++;
         if (line.empty() || line[0] == '#') continue;
 
-        std::smatch match;
+        std::smatch match{};
         if (std::regex_search(line, match, std::regex("^(.*):\\s*$"))) {
             inSection = match.str(1) == context.Params;
             continue;
@@ -41,7 +82,8 @@ auto _readConfig() -> void {
 
             if (!configValue.has_value()) {
                 stream.close();
-                REB_PANIC("unknown config value found in config file")
+                REB_PANIC("unknown config value found in config file at line "
+                          << linePos)
             }
 
             context.Config[std::to_underlying(configValue.value())] =
@@ -51,7 +93,7 @@ auto _readConfig() -> void {
 
         else {
             stream.close();
-            REB_PANIC("cannot parse config file")
+            REB_PANIC("invalid line found in config file at line " << linePos)
         }
     };
 
@@ -120,17 +162,15 @@ auto _writeHashToFile() -> void {
     const auto localConfig = fs::current_path() / ".reb";
     if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
 
-    const auto hashFile = localConfig / "hash";
-    if (fs::exists(hashFile)) fs::rename(hashFile, localConfig / "_hash");
+    if (fs::exists(localConfig / "hash") && !fs::remove(localConfig / "hash"))
+        REB_PANIC("cannot delete hash file")
 
-    std::ofstream stream(hashFile);
+    std::ofstream stream(localConfig / "hash");
     if (!stream.is_open()) REB_PANIC("cannot open output hash file")
 
     auto ignoreList = _getIgnoreList();
     for (const auto &ignorePath : _getSubRepositoriesPath())
         ignoreList.push_back(ignorePath);
-
-    for (const auto &ignorePattern : ignoreList) REB_INFO(ignorePattern)
 
     for (const auto &dirEntry :
          fs::recursive_directory_iterator(fs::current_path())) {
@@ -145,12 +185,42 @@ auto _writeHashToFile() -> void {
 
         if (ignore) continue;
 
-        stream << std::hex << std::uppercase << std::setw(16)
-               << fs::hash_value(dirEntry.path()) << " : "
+        stream << std::hex << std::uppercase << std::setw(8)
+               << file_ext::checksum(dirEntry.path()) << " : "
                << dirEntry.path().string() << std::endl;
     }
 
     stream.close();
+}
+
+auto _getHashFromFile() -> std::vector<std::string> {
+    const auto localConfig{fs::current_path() / ".reb"};
+    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
+
+    if (!fs::exists(localConfig / "hash")) return {};
+
+    std::ifstream stream(localConfig / "hash");
+    if (!stream.is_open()) REB_PANIC("cannot open hash file")
+
+    std::vector<std::string> retval{};
+
+    auto linePos{0};
+    std::string line{};
+    while (std::getline(stream, line)) {
+        linePos++;
+        if (line.empty()) continue;
+
+        std::smatch match{};
+        if (!std::regex_search(line, match,
+                               std::regex("^(.{8})\\s:\\s(.+)$"))) {
+            stream.close();
+            REB_PANIC("invalid line in hash file at line " << linePos)
+        }
+
+        retval.push_back(match[1]);
+    };
+
+    return retval;
 }
 
 auto Help(char **argv) -> void {
@@ -160,7 +230,6 @@ auto Help(char **argv) -> void {
 
 auto Init(char **argv) -> void {
     if (!*++argv) REB_PANIC("unexpected end of command")
-
     context.Params = *argv;
 
     fs::path modelFilePath{};
@@ -183,7 +252,7 @@ auto Init(char **argv) -> void {
             std::cin.get(input);
 
             if (input == 'n')
-                REB_PANIC("cannot remove the old configuration")
+                REB_PANIC("cannot delete the old configuration")
             else if (input == 'Y')
                 break;
         };
@@ -209,11 +278,120 @@ auto Run(char **argv) -> void {
     REB_INFO("reading config file")
     _readConfig();
 
+    REB_INFO("building the project")
+
+    const auto &fileExtension{
+        context.Config[std::to_underlying(reb::config::ConfigValue::EXT)]};
+    const auto &buildName{
+        context.Config[std::to_underlying(reb::config::ConfigValue::EXT)]};
+    const auto &compiler{
+        context.Config[std::to_underlying(reb::config::ConfigValue::COMP)]};
+    const auto &compilerFlags{
+        context.Config[std::to_underlying(reb::config::ConfigValue::FLAGS)]};
+    const auto sourcePath{fs::path(
+        context.Config[std::to_underlying(reb::config::ConfigValue::SOURCE)])};
+    const auto objectPath{fs::current_path() / "obj"};
+    const auto buildPath{fs::path(
+        context.Config[std::to_underlying(reb::config::ConfigValue::BUILD)])};
+    const auto autoRun{
+        bool_ext::from_string(context.Config[std::to_underlying(
+                                  reb::config::ConfigValue::AUTO_RUN)])
+            .value_or(true)};
+    const auto recursive{
+        bool_ext::from_string(context.Config[std::to_underlying(
+                                  reb::config::ConfigValue::RECURSIVE)])
+            .value_or(true)};
+
+    if (!fs::exists(sourcePath) || !fs::is_directory(sourcePath))
+        REB_PANIC("cannot find source folder")
+
+    if (!fs::exists(buildPath) && !fs::create_directory(buildPath))
+        REB_PANIC("cannot create build folder")
+
+    if (!fs::exists(objectPath) && !fs::create_directory(objectPath))
+        REB_PANIC("cannot create object folder")
+
+    auto returnCode{0};
+    const auto hashList{_getHashFromFile()};
+
+    auto ignoreList = _getIgnoreList();
+    for (const auto &ignorePath : _getSubRepositoriesPath())
+        ignoreList.push_back(ignorePath);
+
+    for (const auto &dirEntry :
+         fs::recursive_directory_iterator(fs::current_path())) {
+        bool ignore = false;
+        for (const auto &ignorePattern : ignoreList)
+            if (!fs::is_regular_file(dirEntry) ||
+                !std::regex_match(dirEntry.path().string(),
+                                  std::regex("^.*\\." + fileExtension + "$",
+                                             std::regex::icase)) ||
+                std::regex_match(
+                    dirEntry.path().string(),
+                    std::regex(ignorePattern, std::regex::icase))) {
+                ignore = true;
+                break;
+            }
+
+        if (ignore) continue;
+
+        std::stringstream hash;
+        hash << std::hex << std::uppercase << std::setw(8)
+             << file_ext::checksum(dirEntry.path());
+
+        if (std::find(hashList.begin(), hashList.end(), hash.str()) !=
+            hashList.end()) {
+            REB_INFO("skipping file " << dirEntry.path().filename())
+            continue;
+        }
+
+        REB_INFO("compiling file " << dirEntry.path().filename())
+        returnCode = system(std::string(compiler + " " + compilerFlags +
+                                        " -c -o " + objectPath.string() + "/" +
+                                        dirEntry.path().stem().string() +
+                                        ".o " + dirEntry.path().string())
+                                .c_str());
+
+        if (returnCode != 0)
+            REB_PANIC("cannot compile file " +
+                      dirEntry.path().filename().string())
+    }
+
+    std::string objectList{};
+    for (const auto &dirEntry : fs::directory_iterator(objectPath))
+        if (fs::is_regular_file(dirEntry.path()) &&
+            std::regex_match(dirEntry.path().string(),
+                             std::regex("^.*\\.o$", std::regex::icase)))
+            objectList += dirEntry.path().string() + " ";
+
+    returnCode =
+        system(std::string(compiler + " " + compilerFlags + " -o " +
+                           (buildPath / buildName).string() + " " + objectList)
+                   .c_str());
+
+    if (returnCode != 0) REB_PANIC("cannot build project")
+
     REB_INFO("writing files' hash")
     _writeHashToFile();
 
-    REB_INFO("building the project")
-    REB_NOT_IMPLEMENTED("Run()::build")
+    if (!autoRun) return;
+
+    REB_INFO("executing project" << std::endl)
+    char *nullArgs[] = {NULL};
+    if (execvp((buildPath / buildName).string().c_str(), nullArgs) != 0)
+        REB_PANIC("project execution ended with non zero exit code")
+}
+
+auto Clean(char **argv) -> void {
+    if (*++argv) REB_PANIC("unexpected parameter provided")
+
+    const auto localConfig{fs::current_path() / ".reb"};
+    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
+
+    REB_INFO("cleaning the repository")
+    fs::remove(localConfig / "hash");
+    fs::remove_all(fs::current_path() / "build");
+    fs::remove_all(fs::current_path() / "obj");
 }
 
 int main(int argc, char **argv) {
@@ -229,6 +407,8 @@ int main(int argc, char **argv) {
         Init(argv);
     else if (context.Command == "run")
         Run(argv);
+    else if (context.Command == "clean")
+        Clean(argv);
     else if (context.Command == "snap")
         REB_NOT_IMPLEMENTED("Snap()")
 

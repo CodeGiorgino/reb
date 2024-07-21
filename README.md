@@ -23,39 +23,42 @@ To create a global configuration you just need to edit the models in `~/.config/
 L .config
   L reb
     L models
-      L model_name_1.config
-      L model_name_2.config
+      L c.config
+      L cpp.config
       L ...
 ```
 
 ### Local
 To create a local configuration you just need to cd into your project folder and initialise it
-with `reb init <model_name>`. Now you can edit your model in `.reb/model_name.config`
+with `reb init <language>`. Now you can edit your model in `.reb/language.config`
 ```
 /path/to/project
 L .reb
-  L model_name.config
+  L reb.config
 ```
 
 > **Note:** the local config file will be merged into the global one on initialisation, overwriting the global properties
 
 ### Parameters
-| Name         | Value type  | Description                                         |
-| :----------- | :---------- | :-------------------------------------------------- |
-| **COMP**     | string      | Compiler to use                                     |
-| **FLAGS**    | string      | Compilation flags                                   |
-| **SOURCE**   | string      | Source folder                                       |
-| **BUILD**    | string      | Build output folder                                 |
-| **AUTO_RUN** | true\|false | Whether to auto start the program after compilation |
-| **IGNORE**   | string      | The list of folders and files to ignore             |
+| Name          | Value type  | Description                                         |
+| :------------ | :---------- | :-------------------------------------------------- |
+| **EXT**       | string      | The extension of the files to compile               |
+| **NAME**      | string      | The final build name                                |
+| **COMP**      | string      | Compiler to use                                     |
+| **FLAGS**     | string      | Compilation flags                                   |
+| **SOURCE**    | string      | Source folder                                       |
+| **BUILD**     | string      | Build output folder                                 |
+| **AUTO_RUN**  | true\|false | Whether to auto start the program after compilation |
+| **RECURSIVE** | true\|false | Whether to auto compile the sub repositories        |
 
 ## Usage
 TODO
 
 ### Commands
-| Name    | Description                      | Parameters        |
-| :------ | :------------------------------- | :---------------- |
-| help    | Display usage informations       | -                 |
-| init    | Initialise the project's folder  | `<model_name>`    |
-| run     | Run the compilation              | `<section_name>`  |
-| snap    | Save a snapshot of source folder | `[snapshot_name]` |
+| Name  | Description                                                     | Parameters        |
+| :-----| :-------------------------------------------------------------- | :---------------- |
+| help  | Display usage informations                                      | -                 |
+| init  | Initialise the current folder as a reb repository               | `<language>`      |
+| run   | Run the model provided                                          | `<model_name>`    |
+| clean | Clean the repository                                            | -                 |
+| snap  | Take a snapshot of the repository or revert to a taken snapshot | `[snapshot_path]` |

@@ -6,8 +6,7 @@
 
 namespace enum_ext {
 template <>
-auto to_string(const reb::config::ConfigValue value) noexcept
-    -> std::string {
+auto to_string(const reb::config::ConfigValue value) noexcept -> std::string {
     return reb::config::ConfigValueMap[std::to_underlying(value)];
 }
 
@@ -16,8 +15,10 @@ auto from_string(const std::string value) noexcept
     -> std::optional<reb::config::ConfigValue> {
     for (size_t i = 0;
          i < std::to_underlying(reb::config::ConfigValue::__count__); ++i)
-        if (value == reb::config::ConfigValueMap[i])
+        if (value == reb::config::ConfigValueMap[i]) {
+            if (reb::config::ConfigValueMap[i].empty()) return {};
             return (reb::config::ConfigValue)i;
+        }
 
     return {};
 }
