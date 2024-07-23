@@ -49,7 +49,6 @@ L .reb
 | **SOURCE**    | string      | Source folder                                       |
 | **BUILD**     | string      | Build output folder                                 |
 | **AUTO_RUN**  | true\|false | Whether to auto start the program after compilation |
-| **RECURSIVE** | true\|false | Whether to auto compile the sub repositories        |
 
 ## Usage
 TODO
