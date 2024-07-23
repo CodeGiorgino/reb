@@ -15,14 +15,13 @@ enum class ConfigValue : size_t {
     SOURCE,
     BUILD,
     AUTO_RUN,
-    RECURSIVE,
     IGNORE,
     __count__
 };
 
 static const std::string
     ConfigValueMap[std::to_underlying(ConfigValue::__count__)] = {
-        "EXT", "NAME", "COMP", "FLAGS", "SOURCE", "BUILD", "AUTO_RUN", "RECURSIVE", ""};
+        "EXT", "NAME", "COMP", "FLAGS", "SOURCE", "BUILD", "AUTO_RUN", ""};
 }  // namespace reb::config
 
 namespace enum_ext {

@@ -184,12 +184,7 @@ auto _writeHashToFile() -> void {
                 break;
             }
 
-        if (ignore ||
-            !std::regex_match(dirEntry.path().extension().string(),
-                              std::regex(context.Config[std::to_underlying(
-                                             reb::config::ConfigValue::EXT)],
-                                         std::regex::icase)))
-            continue;
+        if (ignore) continue;
 
         const auto hash = file_ext::checksum(dirEntry.path());
         if (hash == 0) continue;
@@ -225,7 +220,7 @@ auto _getHashFromFile() -> std::unordered_map<std::string, std::string> {
             REB_PANIC("invalid line in hash file at line " << linePos)
         }
 
-        retval.emplace(match[1], match[0]);
+        retval.emplace(match[2], match[1]);
     };
 
     return retval;
@@ -279,7 +274,7 @@ auto Init(char **argv) -> void {
 }
 
 auto Run(char **argv) -> void {
-    if (!**++argv) REB_PANIC("unexpected end of command")
+    if (!*++argv) REB_PANIC("unexpected end of command")
 
     context.Params = *argv;
 
@@ -342,6 +337,7 @@ auto Run(char **argv) -> void {
         std::stringstream hash;
         hash << std::hex << std::uppercase << std::setw(8)
              << file_ext::checksum(dirEntry.path());
+
 
         if (const auto &record = hashList.find(dirEntry.path().string());
             record != hashList.end() && record->second == hash.str()) {
