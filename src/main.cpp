@@ -12,6 +12,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -183,17 +184,24 @@ auto _writeHashToFile() -> void {
                 break;
             }
 
-        if (ignore) continue;
+        if (ignore ||
+            !std::regex_match(dirEntry.path().extension().string(),
+                              std::regex(context.Config[std::to_underlying(
+                                             reb::config::ConfigValue::EXT)],
+                                         std::regex::icase)))
+            continue;
 
-        stream << std::hex << std::uppercase << std::setw(8)
-               << file_ext::checksum(dirEntry.path()) << " : "
+        const auto hash = file_ext::checksum(dirEntry.path());
+        if (hash == 0) continue;
+
+        stream << std::hex << std::uppercase << std::setw(8) << hash << " : "
                << dirEntry.path().string() << std::endl;
     }
 
     stream.close();
 }
 
-auto _getHashFromFile() -> std::vector<std::string> {
+auto _getHashFromFile() -> std::unordered_map<std::string, std::string> {
     const auto localConfig{fs::current_path() / ".reb"};
     if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
 
@@ -202,7 +210,7 @@ auto _getHashFromFile() -> std::vector<std::string> {
     std::ifstream stream(localConfig / "hash");
     if (!stream.is_open()) REB_PANIC("cannot open hash file")
 
-    std::vector<std::string> retval{};
+    std::unordered_map<std::string, std::string> retval{};
 
     auto linePos{0};
     std::string line{};
@@ -217,7 +225,7 @@ auto _getHashFromFile() -> std::vector<std::string> {
             REB_PANIC("invalid line in hash file at line " << linePos)
         }
 
-        retval.push_back(match[1]);
+        retval.emplace(match[1], match[0]);
     };
 
     return retval;
@@ -297,10 +305,6 @@ auto Run(char **argv) -> void {
         bool_ext::from_string(context.Config[std::to_underlying(
                                   reb::config::ConfigValue::AUTO_RUN)])
             .value_or(true)};
-    const auto recursive{
-        bool_ext::from_string(context.Config[std::to_underlying(
-                                  reb::config::ConfigValue::RECURSIVE)])
-            .value_or(true)};
 
     if (!fs::exists(sourcePath) || !fs::is_directory(sourcePath))
         REB_PANIC("cannot find source folder")
@@ -323,9 +327,9 @@ auto Run(char **argv) -> void {
         bool ignore = false;
         for (const auto &ignorePattern : ignoreList)
             if (!fs::is_regular_file(dirEntry) ||
-                !std::regex_match(dirEntry.path().string(),
-                                  std::regex("^.*\\." + fileExtension + "$",
-                                             std::regex::icase)) ||
+                !std::regex_match(
+                    dirEntry.path().extension().string(),
+                    std::regex(fileExtension, std::regex::icase)) ||
                 std::regex_match(
                     dirEntry.path().string(),
                     std::regex(ignorePattern, std::regex::icase))) {
@@ -339,8 +343,8 @@ auto Run(char **argv) -> void {
         hash << std::hex << std::uppercase << std::setw(8)
              << file_ext::checksum(dirEntry.path());
 
-        if (std::find(hashList.begin(), hashList.end(), hash.str()) !=
-            hashList.end()) {
+        if (const auto &record = hashList.find(dirEntry.path().string());
+            record != hashList.end() && record->second == hash.str()) {
             REB_INFO("skipping file " << dirEntry.path().filename())
             continue;
         }
