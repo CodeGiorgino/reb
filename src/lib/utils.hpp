@@ -1,5 +1,4 @@
 #pragma once
-#include <iostream>
 #include <optional>
 #include <string>
 
@@ -54,11 +53,3 @@ namespace reb::utils {
         exit(1);                                                          \
     }
 }  // namespace reb::utils
-
-namespace enum_ext {
-template <typename T>
-auto to_string(const T value) noexcept -> std::string;
-
-template <typename T>
-auto from_string(const std::string value) noexcept -> std::optional<T>;
-}  // namespace enum_ext

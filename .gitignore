@@ -1,5 +1,5 @@
-.git/
-.reb/
+.git/*
+.reb/*
 
-obj/
-build/
+obj/*
+build/*
