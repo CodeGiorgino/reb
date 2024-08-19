@@ -4,19 +4,6 @@ REB is a small command line build tool which you can use to build your project a
 ## Configuration
 Before using REB, you need to execute `install.sh` to begin the installation
 
-### Global
-To create a global configuration you just need to edit the models in `~/.config/reb/models`
-```
-~
-L .config
-  L reb
-    L models
-      L c.json
-      L cpp.json
-      L ...
-```
-
-### Local
 To create a local configuration you just need to cd into your project folder and initialise it
 with `reb init <language>`. Now you can edit your model in `.reb/config.json`
 ```
@@ -24,6 +11,8 @@ with `reb init <language>`. Now you can edit your model in `.reb/config.json`
 L .reb
   L config.json
 ```
+
+> To add new languages, you can create a file under `~/.config/reb/models/<language>.json` 
 
 ### config.json
 | Name | Description | Type |
@@ -40,8 +29,7 @@ L .reb
 | linking.target      | the executable name                              | `string      ` |
 | post compile        | the commands to execute after the compilation    | `string array` |
 
-> You can have a look at [cpp.json](assets/cpp.json) to see the fields you need to include in
-> your model's sections
+> Check the [assets](assets) folder for examples
 
 ## Usage
 After you have initialised your project's folder as a reb repository, you can also define a `.rebignore` file

@@ -14,8 +14,6 @@ mkdir -p ~/.config
 mkdir -p ~/.config/reb
 mkdir -p ~/.config/reb/models
 
-# curl -o ~/.config/reb/models/models.tar.gz https://raw.githubusercontent.com/CodeGiorgino/reb/master/assets/models.tar.gz
-# tar -xvzf ~/.config/reb/models/models.tar.gz
 cp assets/cpp.json ~/.config/reb/models/
 
 GXX='g++'
