@@ -45,8 +45,12 @@ Then you can run `reb run <model_name>` to start the compilation
 ### Commands
 | Name | Description | Parameters |
 | :--- | :---------- | :--------- |
-| help  | Display usage informations                                         | `-              ` |
-| init  | Initialise the current folder as a reb repository                  | `<language>     ` |
-| run   | Run the model provided                                             | `<model_name>   ` |
-| clean | Clean the repository                                               | `-              ` |
-| snap  | Take a snapshot of the repository or revert to a previous snapshot | `[snapshot_path]` |
+| help  | display usage informations                                         | `-              ` |
+| init  | initialise the current folder as a reb repository                  | `<language>     ` |
+| run   | run the model provided                                             | `<model_name>   ` |
+| clean | clean the repository                                               | `-              ` |
+| snap  | take a snapshot of the repository or revert to a previous snapshot | `[snapshot_path]` |
+
+## TODO
+- `snap` command not implemented
+- recursive build not implemented
