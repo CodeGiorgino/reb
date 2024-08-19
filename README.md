@@ -1,15 +1,3 @@
-Table of contents:
-- [REB - Rebuild Command Line Utility](#reb---rebuild-command-line-utility)
-  - [Configuration](#configuration)
-    - [Global](#global)
-    - [Local](#local)
-    - [Parameters](#parameters)
-  - [Usage](#usage)
-    - [Commands](#commands)
-
-<br>
-<br>
-
 # REB - Rebuild Command Line Utility
 REB is a small command line build tool which you can use to build your project and keep track of releases.
 
