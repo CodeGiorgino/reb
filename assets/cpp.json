@@ -17,7 +17,7 @@
         },
 
         "post compile": [
-            "exec ./build/main"
+            "./build/main"
         ]
     },
 
@@ -39,7 +39,7 @@
         },
 
         "post compile": [
-            "exec ./build/main"
+            "./build/main"
         ]
     },
 
