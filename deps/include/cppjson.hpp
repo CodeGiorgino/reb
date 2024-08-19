@@ -1,3 +1,7 @@
+/*
+ * Check https://github.com/CodeGiorgino/cppjson for the full implementation
+ */
+
 #pragma once
 
 #include <cstddef>
@@ -23,6 +27,7 @@ typedef std::variant<void *, bool, int, float, std::shared_ptr<std::string>,
 /* Json definition */
 struct json_node final {
     /* Constructors */
+   public:
     json_node() noexcept;
     json_node(const bool &value) noexcept;
     json_node(const int &value) noexcept;
@@ -36,6 +41,7 @@ struct json_node final {
     ~json_node() noexcept = default;
 
     /* Type cast overload */
+   public:
     operator bool() const;
     operator int() const;
     operator float() const;
@@ -43,13 +49,30 @@ struct json_node final {
     operator array_t() const;
     operator object_t() const;
 
+    /* Operators overload */
+   public:
+    /**
+     * @brief Access the specified object node
+     *
+     * @param key The index of the node
+     * @return The node reference
+     */
+    auto operator[](const size_t &index) -> json_node &;
+
     /**
      * @brief Access the specified object node
      *
      * @param key The key of the node
      * @return The node reference
      */
-    auto operator[](const size_t &index) -> json_node &;
+    auto operator[](const char *key) -> json_node &;
+
+    /**
+     * @brief Access the specified object node
+     *
+     * @param key The key of the node
+     * @return The node reference
+     */
     auto operator[](const std::string &key) -> json_node &;
 
     /**
@@ -78,14 +101,16 @@ struct json_node final {
     auto operator=(const object_t &value) noexcept -> json_node &;
 
     /* Function members */
+   public:
     /**
      * @brief Dump the node
      *
-     * @param indent The indentation level to follow (if 0 is provided, print on
+     * @param indent The indentation to follow (if 0 is provided, print on
      * one line)
+     * @param level The indentation level
      * @return The serialized node
      */
-    auto dump(size_t indent) const noexcept -> std::string;
+    auto dump(size_t indent, size_t level = 0) const noexcept -> std::string;
 
     /**
      * @brief Set the object to hold a null value
