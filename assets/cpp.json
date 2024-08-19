@@ -1,0 +1,91 @@
+{
+    "main_release": {
+        "compilation": {
+            "command": "g++",
+            "flags": ["-Wall", "-Wextra", "-std=c++23", "-O2", "-c"],
+            "source": "src/*.cpp",
+            "dest": "obj"
+        },
+
+        "linking": {
+            "command": "g++",
+            "flags": [],
+            "source": "obj/*.o",
+            "dest": "build",
+            "deps": [],
+            "target": "main"
+        },
+
+        "post compile": [
+            "exec ./build/main"
+        ]
+    },
+
+    "main_debug": {
+        "compilation": {
+            "command": "g++",
+            "flags": ["-Wall", "-Wextra", "-std=c++23", "-Og", "-c"],
+            "source": "src/*.cpp",
+            "dest": "obj"
+        },
+
+        "linking": {
+            "command": "g++",
+            "flags": [],
+            "source": "obj/*.o",
+            "dest": "build",
+            "deps": [],
+            "target": "main"
+        },
+
+        "post compile": [
+            "exec ./build/main"
+        ]
+    },
+
+    "lib_release": {
+        "compilation": {
+            "command": "g++",
+            "flags": ["-Wall", "-Wextra", "-std=c++23", "-O2", "-c"],
+            "source": "src/*.cpp",
+            "dest": "obj"
+        },
+
+        "linking": {
+            "command": "ar",
+            "flags": ["rvs"],
+            "source": "obj/*.o",
+            "dest": "build",
+            "deps": [],
+            "target": "main.a"
+        },
+
+        "post compile": [
+            "mkdir -p build/include",
+            "cp src/main.hpp -- build/include"
+        ]
+    },
+
+    "lib_debug": {
+        "compilation": {
+            "command": "g++",
+            "flags": ["-Wall", "-Wextra", "-std=c++23", "-Og", "-c"],
+            "source": "src/*.cpp",
+            "dest": "obj"
+        },
+
+        "linking": {
+            "command": "ar",
+            "flags": ["rvs"],
+            "source": "obj/*.o",
+            "dest": "build",
+            "deps": [],
+            "target": "main.a"
+        },
+
+        "post compile": [
+            "mkdir -p build/include",
+            "cp src/main.hpp -- build/include"
+        ]
+    },
+}
