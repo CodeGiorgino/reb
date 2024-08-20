@@ -225,9 +225,6 @@ auto command_compile() -> void {
         REB_PANIC("missing field 'command' in config file")
 
     if (const auto path = (std::string)section["dest"s];
-        fs::exists(path) && !fs::remove_all(path))
-        REB_PANIC("cannot delete destination folder")
-    if (const auto path = (std::string)section["dest"s];
         !fs::exists(path) && !fs::create_directory(path))
         REB_PANIC("cannot create destination folder")
 
@@ -301,7 +298,7 @@ auto command_link() -> void {
         fs::exists(path) && !fs::remove_all(path))
         REB_PANIC("cannot delete destination folder")
     if (const auto path = (std::string)section["dest"s];
-        !fs::exists(path) && !fs::create_directory(path))
+        !fs::create_directory(path))
         REB_PANIC("cannot create destination folder")
 
     std::vector<std::string> ignoreList{};
