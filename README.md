@@ -4,6 +4,8 @@ REB is a small command line build tool which you can use to build your project a
 ## Configuration
 Before using REB, you need to execute `install.sh` to begin the installation
 
+> Run the installation script with the `--debug` flag to include debug info
+
 To create a local configuration you just need to cd into your project folder and initialise it
 with `reb init <language>`. Now you can edit your model in `.reb/config.json`
 ```
