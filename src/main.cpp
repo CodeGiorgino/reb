@@ -1,6 +1,5 @@
 #include <unistd.h>
 
-#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -8,18 +7,16 @@
 #include <iomanip>
 #include <ios>
 #include <iostream>
-#include <istream>
 #include <ostream>
 #include <regex>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "../deps/include/cppjson.hpp"
 #include "../deps/include/parser.hpp"
-#include "context/context.hpp"
-#include "lib/utils.hpp"
+#include "context.hpp"
+#include "utils.hpp"
 namespace fs = std::filesystem;
 using std::literals::string_literals::operator""s;
 
@@ -31,7 +28,8 @@ auto checksum(const fs::path filepath) -> uint32_t {
     unsigned shift = 0;
 
     std::ifstream stream(filepath);
-    if (!stream.is_open()) REB_PANIC("cannot open file " << filepath.filename())
+    if (!stream.is_open())
+        REB_PANIC("cannot open file " << filepath.filename());
 
     for (uint32_t ch = stream.get(); stream; ch = stream.get()) {
         checksum += (ch << shift);
@@ -61,7 +59,7 @@ auto regex_from_posix(const std::string &source) noexcept -> std::string {
 
 auto read_config(bool from_model = true) -> void {
     const auto localConfig{fs::current_path() / ".reb"};
-    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
+    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
 
     std::ifstream stream(localConfig / "config.json");
     if (!stream.is_open()) REB_PANIC("cannot open config file");
@@ -76,11 +74,11 @@ auto read_config(bool from_model = true) -> void {
     if (!from_model) return;
 
     context.Config = context.Config[context.Params];
-    if (context.Config.is_null()) REB_PANIC("the model is not defined")
+    if (context.Config.is_null()) REB_PANIC("the model is not defined");
 
     if (!fs::exists(fs::current_path() / ".rebignore")) return;
     stream.open(fs::current_path() / ".rebignore");
-    if (!stream.is_open()) REB_PANIC("cannot open .rebignore file")
+    if (!stream.is_open()) REB_PANIC("cannot open .rebignore file");
 
     context.Config["ignore"s] = json::array_t{};
     while (std::getline(stream, line)) {
@@ -100,12 +98,12 @@ auto read_config(bool from_model = true) -> void {
 
 auto write_hash() -> void {
     const auto localConfig = fs::current_path() / ".reb";
-    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
+    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
     if (fs::exists(localConfig / "hash") && !fs::remove(localConfig / "hash"))
-        REB_PANIC("cannot delete hash file")
+        REB_PANIC("cannot delete hash file");
 
     std::ofstream stream(localConfig / "hash");
-    if (!stream.is_open()) REB_PANIC("cannot open output hash file")
+    if (!stream.is_open()) REB_PANIC("cannot open output hash file");
 
     std::vector<std::string> ignoreList{};
     if (!context.Config["ignore"s].is_null())
@@ -136,11 +134,11 @@ auto write_hash() -> void {
 
 auto get_hash() -> std::unordered_map<std::string, std::string> {
     const auto localConfig{fs::current_path() / ".reb"};
-    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
+    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
     if (!fs::exists(localConfig / "hash")) return {};
 
     std::ifstream stream(localConfig / "hash");
-    if (!stream.is_open()) REB_PANIC("cannot open hash file")
+    if (!stream.is_open()) REB_PANIC("cannot open hash file");
 
     std::unordered_map<std::string, std::string> retval{};
 
@@ -154,7 +152,7 @@ auto get_hash() -> std::unordered_map<std::string, std::string> {
         if (!std::regex_search(line, match,
                                std::regex{"^(.{8})\\s:\\s(.+)$"})) {
             stream.close();
-            REB_PANIC("invalid line in hash file at line " << linePos)
+            REB_PANIC("invalid line in hash file at line " << linePos);
         }
 
         retval.emplace(match[2], match[1]);
@@ -164,12 +162,12 @@ auto get_hash() -> std::unordered_map<std::string, std::string> {
 }
 
 auto command_help(char **argv) -> void {
-    if (*++argv) REB_ERROR("unexpected parameter provided")
-    REB_USAGE
+    if (*++argv) REB_ERROR("unexpected parameter provided");
+    REB_USAGE();
 }
 
 auto command_init(char **argv) -> void {
-    if (!*++argv) REB_PANIC("unexpected end of command")
+    if (!*++argv) REB_PANIC("unexpected end of command");
     context.Params = *argv;
 
     fs::path modelFilePath{};
@@ -182,11 +180,11 @@ auto command_init(char **argv) -> void {
             break;
         }
 
-    if (modelFilePath.empty()) REB_PANIC("config model not found")
+    if (modelFilePath.empty()) REB_PANIC("config model not found");
 
     const auto localConfig{fs::current_path() / ".reb"};
     if (fs::exists(localConfig)) {
-        REB_INFO("already a reb repository")
+        REB_INFO("already a reb repository");
 
         char input{};
         while (true) {
@@ -195,7 +193,7 @@ auto command_init(char **argv) -> void {
             std::cin.get(input);
 
             if (input == 'n')
-                REB_PANIC("cannot delete the old configuration")
+                REB_PANIC("cannot delete the old configuration");
             else if (input == 'Y')
                 break;
         };
@@ -204,29 +202,29 @@ auto command_init(char **argv) -> void {
     }
 
     if (!fs::create_directory(localConfig))
-        REB_PANIC("cannot create .reb folder")
+        REB_PANIC("cannot create .reb folder");
 
     if (!fs::copy_file(modelFilePath, localConfig / "config.json"))
-        REB_PANIC("cannot copy model")
+        REB_PANIC("cannot copy model");
 
     if (!fs::create_directory(localConfig / "snap"))
-        REB_PANIC("cannot create snapshot folder")
+        REB_PANIC("cannot create snapshot folder");
 }
 
 auto command_compile() -> void {
     auto &section = context.Config["compilation"s];
     if (section.is_null())
-        REB_PANIC("missing field 'compilation' in config file")
+        REB_PANIC("missing field 'compilation' in config file");
     if (section["source"s].is_null())
-        REB_PANIC("missing field 'source' in config file")
+        REB_PANIC("missing field 'source' in config file");
     if (section["dest"s].is_null())
-        REB_PANIC("missing field 'dest' in config file")
+        REB_PANIC("missing field 'dest' in config file");
     if (section["command"s].is_null())
-        REB_PANIC("missing field 'command' in config file")
+        REB_PANIC("missing field 'command' in config file");
 
     if (const auto path = (std::string)section["dest"s];
         !fs::exists(path) && !fs::create_directory(path))
-        REB_PANIC("cannot create destination folder")
+        REB_PANIC("cannot create destination folder");
 
     const auto hashList{get_hash()};
     std::vector<std::string> ignoreList{};
@@ -259,11 +257,11 @@ auto command_compile() -> void {
         if (const auto &record = hashList.find(dirEntry.path().string());
             record != hashList.end() && record->second == hash.str()) {
             REB_INFO("skipping file " << dirEntry.path().filename() << std::endl
-                                      << "-- reason (not modified)")
+                                      << "-- reason (not modified)");
             continue;
         }
 
-        REB_INFO("processing file " << dirEntry.path().filename())
+        REB_INFO("processing file " << dirEntry.path().filename());
         auto command = (std::string)section["command"s];
         if (!section["flags"s].is_null())
             for (const auto &entry : (json::array_t)section["flags"s])
@@ -278,28 +276,28 @@ auto command_compile() -> void {
             REB_PANIC("cannot execute command on file "
                       << dirEntry.path().filename().string() << std::endl
                       << "-- section: (compilation)" << std::endl
-                      << "-- command: (" << command << ")")
+                      << "-- command: (" << command << ")");
     }
 }
 
 auto command_link() -> void {
     auto &section = context.Config["linking"s];
-    if (section.is_null()) REB_PANIC("missing field 'linking' in config file")
+    if (section.is_null()) REB_PANIC("missing field 'linking' in config file");
     if (section["source"s].is_null())
-        REB_PANIC("missing field 'source' in config file")
+        REB_PANIC("missing field 'source' in config file");
     if (section["dest"s].is_null())
-        REB_PANIC("missing field 'dest' in config file")
+        REB_PANIC("missing field 'dest' in config file");
     if (section["command"s].is_null())
-        REB_PANIC("missing field 'command' in config file")
+        REB_PANIC("missing field 'command' in config file");
     if (section["target"s].is_null())
-        REB_PANIC("missing field 'target' in config file")
+        REB_PANIC("missing field 'target' in config file");
 
     if (const auto path = (std::string)section["dest"s];
         fs::exists(path) && !fs::remove_all(path))
-        REB_PANIC("cannot delete destination folder")
+        REB_PANIC("cannot delete destination folder");
     if (const auto path = (std::string)section["dest"s];
         !fs::create_directory(path))
-        REB_PANIC("cannot create destination folder")
+        REB_PANIC("cannot create destination folder");
 
     std::vector<std::string> ignoreList{};
     if (!context.Config["ignore"s].is_null())
@@ -330,10 +328,10 @@ auto command_link() -> void {
             command += " " + (std::string)entry;
 
     if (system(command.c_str()) != 0)
-        REB_PANIC("cannot execute command" << std::endl
-                                           << "-- section: (linking)"
-                                           << std::endl
-                                           << "-- command: (" << command << ")")
+        REB_PANIC("cannot execute command"
+                  << std::endl
+                  << "-- section: (linking)" << std::endl
+                  << "-- command: (" << command << ")");
 }
 
 auto command_post_compile() -> void {
@@ -346,60 +344,60 @@ auto command_post_compile() -> void {
             REB_PANIC("cannot execute command"
                       << std::endl
                       << "-- section: (post compile)" << std::endl
-                      << "-- command: (" << command << ")")
+                      << "-- command: (" << command << ")");
     }
 }
 
 auto command_run(char **argv) -> void {
-    if (!*++argv) REB_PANIC("unexpected end of command")
+    if (!*++argv) REB_PANIC("unexpected end of command");
 
     context.Params = *argv;
 
-    REB_INFO("reading config file")
+    REB_INFO("reading config file");
     read_config();
 
-    REB_INFO("building the project")
+    REB_INFO("building the project");
     command_compile();
     command_link();
     command_post_compile();
 
-    REB_INFO("writing files' hash")
+    REB_INFO("writing files' hash");
     write_hash();
 }
 
 auto command_clean(char **argv) -> void {
-    if (*++argv) REB_PANIC("unexpected parameter provided")
+    if (*++argv) REB_PANIC("unexpected parameter provided");
 
-    REB_INFO("reading config file")
+    REB_INFO("reading config file");
     read_config(false);
 
     const auto localConfig{fs::current_path() / ".reb"};
-    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository")
+    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
 
-    REB_INFO("cleaning the repository")
+    REB_INFO("cleaning the repository");
     if (fs::exists(localConfig / "hash") && !fs::remove(localConfig / "hash"))
-        REB_PANIC("cannot delete hash file")
+        REB_PANIC("cannot delete hash file");
 
     for (auto &entry : (json::object_t)context.Config) {
         auto &section = entry.second["compilation"s];
         if (section.is_null())
-            REB_PANIC("missing field 'compilation' in config file")
+            REB_PANIC("missing field 'compilation' in config file");
         if (section["dest"s].is_null())
-            REB_PANIC("missing field 'dest' in config file")
+            REB_PANIC("missing field 'dest' in config file");
 
         auto dest = (std::string)section["dest"s];
         if (fs::exists(dest) && !fs::remove_all(dest))
-            REB_PANIC("cannot delete folder '" << dest << "'")
+            REB_PANIC("cannot delete folder '" << dest << "'");
 
         section = entry.second["linking"s];
         if (section.is_null())
-            REB_PANIC("missing field 'linking' in config file")
+            REB_PANIC("missing field 'linking' in config file");
         if (section["dest"s].is_null())
-            REB_PANIC("missing field 'dest' in config file")
+            REB_PANIC("missing field 'dest' in config file");
 
         dest = (std::string)section["dest"s];
         if (fs::exists(dest) && !fs::remove_all(dest))
-            REB_PANIC("cannot delete folder '" << dest << "'")
+            REB_PANIC("cannot delete folder '" << dest << "'");
     }
 }
 
@@ -407,7 +405,7 @@ int main(int argc, char **argv) {
     (void)argc;
 
     context.ProgramName = *argv;
-    if (!*++argv) REB_PANIC("unexpected end of command")
+    if (!*++argv) REB_PANIC("unexpected end of command");
 
     context.Command = *argv;
     if (context.Command == "help")
@@ -419,8 +417,8 @@ int main(int argc, char **argv) {
     else if (context.Command == "clean")
         command_clean(argv);
     else if (context.Command == "snap")
-        REB_NOT_IMPLEMENTED("Snap()")
+        REB_NOT_IMPLEMENTED("Snap()");
 
-    REB_INFO("command completed")
+    REB_INFO("command completed");
     return 0;
 }

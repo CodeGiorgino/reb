@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <string>
 
-#include "../../deps/include/cppjson.hpp"
+#include "../deps/include/cppjson.hpp"
 namespace fs = std::filesystem;
 
 namespace reb::context {
