@@ -41,12 +41,6 @@ auto checksum(const fs::path filepath) -> uint32_t {
 }
 }  // namespace file_ext
 
-auto get_subrepos_path() -> std::vector<std::string> {
-    std::vector<std::string> retval{};
-
-    return retval;
-}
-
 auto regex_from_posix(const std::string &source) noexcept -> std::string {
     if (source.empty()) return source;
     auto retval = source;
@@ -57,6 +51,17 @@ auto regex_from_posix(const std::string &source) noexcept -> std::string {
 }
 
 auto read_config(enviroment &env, bool from_model = true) -> void {
+    /* excluding the sub repositories */
+    env.configJson["ignore"s] = json::array_t{};
+    for (const auto &dirEntry :
+         fs::recursive_directory_iterator(fs::current_path())) {
+        if (dirEntry.is_directory() && dirEntry.path().stem() == ".reb" &&
+            dirEntry.path().parent_path() != fs::current_path())
+            env.configJson["ignore"s]
+                << json::json_node{dirEntry.path().parent_path() / "/*"};
+    }
+
+    /* reading the config file */
     const auto localConfig{fs::current_path() / ".reb"};
     if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
 
@@ -72,27 +77,21 @@ auto read_config(enviroment &env, bool from_model = true) -> void {
     env.configJson = json::parser::deserialize(configFile);
     if (!from_model) return;
 
+    /* reading the model */
     env.configJson = env.configJson[env.params];
     if (env.configJson.is_null()) REB_PANIC("the model is not defined");
 
+    /* reding the .rebignore file */
     if (!fs::exists(fs::current_path() / ".rebignore")) return;
     stream.open(fs::current_path() / ".rebignore");
     if (!stream.is_open()) REB_PANIC("cannot open .rebignore file");
 
-    env.configJson["ignore"s] = json::array_t{};
     while (std::getline(stream, line)) {
         if (line.empty()) continue;
         env.configJson["ignore"s] << json::json_node{regex_from_posix(line)};
     }
 
     stream.close();
-    for (const auto &dirEntry :
-         fs::recursive_directory_iterator(fs::current_path())) {
-        if (dirEntry.is_directory() && dirEntry.path().stem() == ".reb" &&
-            dirEntry.path().parent_path() != fs::current_path())
-            env.configJson["ignore"s]
-                << json::json_node{dirEntry.path().parent_path() / "/*"};
-    }
 }
 
 auto write_hash(enviroment &env) -> void {
@@ -104,11 +103,13 @@ auto write_hash(enviroment &env) -> void {
     std::ofstream stream(localConfig / "hash");
     if (!stream.is_open()) REB_PANIC("cannot open output hash file");
 
+    /* get the ignorelist */
     std::vector<std::string> ignoreList{};
     if (!env.configJson["ignore"s].is_null())
         for (const auto &entry : (json::array_t)env.configJson["ignore"s])
             ignoreList.push_back((std::string)entry);
 
+    /* writing files' hash */
     for (const auto &dirEntry :
          fs::recursive_directory_iterator(fs::current_path())) {
         if (std::any_of(ignoreList.begin(), ignoreList.end(),
@@ -141,6 +142,7 @@ auto get_hash() -> std::unordered_map<std::string, std::string> {
 
     std::unordered_map<std::string, std::string> retval{};
 
+    /* reading the hash file */
     auto linePos{0};
     std::string line{};
     while (std::getline(stream, line)) {
@@ -169,18 +171,19 @@ auto command_init(enviroment &env, char **argv) -> void {
     if (!*++argv) REB_PANIC("unexpected end of command");
     env.params = *argv;
 
+    /* search for the model */
     fs::path modelFilePath{};
     for (const auto &dirEntry :
          fs::recursive_directory_iterator(env.configPath / "models"))
-        if (const auto fileName{dirEntry.path().string()};
-            !dirEntry.is_directory() &&
-            fileName.ends_with(env.params + ".json")) {
-            modelFilePath = dirEntry.path();
+        if (!dirEntry.is_directory() &&
+            dirEntry.path().stem() == env.params + ".json") {
+            modelFilePath = dirEntry.path().string();
             break;
         }
 
     if (modelFilePath.empty()) REB_PANIC("config model not found");
 
+    /* check for old config */
     const auto localConfig{fs::current_path() / ".reb"};
     if (fs::exists(localConfig)) {
         REB_INFO("already a reb repository");
@@ -200,6 +203,7 @@ auto command_init(enviroment &env, char **argv) -> void {
         fs::remove_all(localConfig);
     }
 
+    /* make the repository folder tree */
     if (!fs::create_directory(localConfig))
         REB_PANIC("cannot create .reb folder");
 
@@ -211,6 +215,7 @@ auto command_init(enviroment &env, char **argv) -> void {
 }
 
 auto command_compile(enviroment &env) -> void {
+    /* reading the model compilation section */
     auto &section = env.configJson["compilation"s];
     if (section.is_null())
         REB_PANIC("missing field 'compilation' in config file");
@@ -225,7 +230,10 @@ auto command_compile(enviroment &env) -> void {
         !fs::exists(path) && !fs::create_directory(path))
         REB_PANIC("cannot create destination folder");
 
+    /* get the hash list */
     const auto hashList{get_hash()};
+
+    /* get the ignorelist */
     std::vector<std::string> ignoreList{};
     if (!env.configJson["ignore"s].is_null())
         for (const auto &entry : (json::array_t)env.configJson["ignore"s])
@@ -253,6 +261,7 @@ auto command_compile(enviroment &env) -> void {
         hash << std::hex << std::uppercase << std::setw(8)
              << file_ext::checksum(dirEntry.path());
 
+        /* check if the file was edited */
         if (const auto &record = hashList.find(dirEntry.path().string());
             record != hashList.end() && record->second == hash.str()) {
             REB_INFO("skipping file " << dirEntry.path().filename() << std::endl
@@ -260,6 +269,7 @@ auto command_compile(enviroment &env) -> void {
             continue;
         }
 
+        /* compose the compilation command */
         REB_INFO("processing file " << dirEntry.path().filename());
         auto command = (std::string)section["command"s];
         if (!section["flags"s].is_null())
@@ -271,6 +281,8 @@ auto command_compile(enviroment &env) -> void {
             fs::path((std::string)section["dest"s] / dirEntry.path().stem())
                 .string() +
             ".o " + dirEntry.path().string();
+
+        /* execute the compilation command */
         if (system(command.c_str()) != 0)
             REB_PANIC("cannot execute command on file "
                       << dirEntry.path().filename().string() << std::endl
@@ -280,6 +292,7 @@ auto command_compile(enviroment &env) -> void {
 }
 
 auto command_link(enviroment &env) -> void {
+    /* reading the model linking section */
     auto &section = env.configJson["linking"s];
     if (section.is_null()) REB_PANIC("missing field 'linking' in config file");
     if (section["source"s].is_null())
@@ -298,11 +311,13 @@ auto command_link(enviroment &env) -> void {
         !fs::create_directory(path))
         REB_PANIC("cannot create destination folder");
 
+    /* get the ignorelist */
     std::vector<std::string> ignoreList{};
     if (!env.configJson["ignore"s].is_null())
         for (const auto &entry : (json::array_t)env.configJson["ignore"s])
             ignoreList.push_back((std::string)entry);
 
+    /* compose the linking command */
     auto command = (std::string)section["command"s];
     if (!section["flags"s].is_null())
         for (const auto &entry : (json::array_t)section["flags"s])
@@ -326,6 +341,7 @@ auto command_link(enviroment &env) -> void {
         for (const auto &entry : (json::array_t)section["deps"s])
             command += " " + (std::string)entry;
 
+    /* execute the linking command */
     if (system(command.c_str()) != 0)
         REB_PANIC("cannot execute command"
                   << std::endl
@@ -334,9 +350,11 @@ auto command_link(enviroment &env) -> void {
 }
 
 auto command_post_compile(enviroment &env) -> void {
+    /* reading the post compile field */
     auto &section = env.configJson["post compile"s];
     if (section.is_null()) return;
 
+    /* execute the commands */
     for (const auto &entry : (json::array_t)section) {
         if (const auto command = (std::string)entry;
             system(command.c_str()) != 0)
@@ -373,10 +391,12 @@ auto command_clean(enviroment &env, char **argv) -> void {
     const auto localConfig{fs::current_path() / ".reb"};
     if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
 
+    /* remove the hash file */
     REB_INFO("cleaning the repository");
     if (fs::exists(localConfig / "hash") && !fs::remove(localConfig / "hash"))
         REB_PANIC("cannot delete hash file");
 
+    /* remove the destination folders */
     for (auto &entry : (json::object_t)env.configJson) {
         auto &section = entry.second["compilation"s];
         if (section.is_null())
