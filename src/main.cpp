@@ -15,12 +15,11 @@
 
 #include "../deps/include/cppjson.hpp"
 #include "../deps/include/parser.hpp"
-#include "context.hpp"
+#include "enviroment.hpp"
 #include "utils.hpp"
 namespace fs = std::filesystem;
 using std::literals::string_literals::operator""s;
-
-static reb::context::Context context{};
+using enviroment = reb::enviroment::enviroment;
 
 namespace file_ext {
 auto checksum(const fs::path filepath) -> uint32_t {
@@ -57,7 +56,7 @@ auto regex_from_posix(const std::string &source) noexcept -> std::string {
     return retval;
 }
 
-auto read_config(bool from_model = true) -> void {
+auto read_config(enviroment &env, bool from_model = true) -> void {
     const auto localConfig{fs::current_path() / ".reb"};
     if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
 
@@ -70,20 +69,20 @@ auto read_config(bool from_model = true) -> void {
     };
 
     stream.close();
-    context.Config = json::parser::deserialize(configFile);
+    env.configJson = json::parser::deserialize(configFile);
     if (!from_model) return;
 
-    context.Config = context.Config[context.Params];
-    if (context.Config.is_null()) REB_PANIC("the model is not defined");
+    env.configJson = env.configJson[env.params];
+    if (env.configJson.is_null()) REB_PANIC("the model is not defined");
 
     if (!fs::exists(fs::current_path() / ".rebignore")) return;
     stream.open(fs::current_path() / ".rebignore");
     if (!stream.is_open()) REB_PANIC("cannot open .rebignore file");
 
-    context.Config["ignore"s] = json::array_t{};
+    env.configJson["ignore"s] = json::array_t{};
     while (std::getline(stream, line)) {
         if (line.empty()) continue;
-        context.Config["ignore"s] << json::json_node{regex_from_posix(line)};
+        env.configJson["ignore"s] << json::json_node{regex_from_posix(line)};
     }
 
     stream.close();
@@ -91,12 +90,12 @@ auto read_config(bool from_model = true) -> void {
          fs::recursive_directory_iterator(fs::current_path())) {
         if (dirEntry.is_directory() && dirEntry.path().stem() == ".reb" &&
             dirEntry.path().parent_path() != fs::current_path())
-            context.Config["ignore"s]
+            env.configJson["ignore"s]
                 << json::json_node{dirEntry.path().parent_path() / "/*"};
     }
 }
 
-auto write_hash() -> void {
+auto write_hash(enviroment &env) -> void {
     const auto localConfig = fs::current_path() / ".reb";
     if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
     if (fs::exists(localConfig / "hash") && !fs::remove(localConfig / "hash"))
@@ -106,8 +105,8 @@ auto write_hash() -> void {
     if (!stream.is_open()) REB_PANIC("cannot open output hash file");
 
     std::vector<std::string> ignoreList{};
-    if (!context.Config["ignore"s].is_null())
-        for (const auto &entry : (json::array_t)context.Config["ignore"s])
+    if (!env.configJson["ignore"s].is_null())
+        for (const auto &entry : (json::array_t)env.configJson["ignore"s])
             ignoreList.push_back((std::string)entry);
 
     for (const auto &dirEntry :
@@ -166,16 +165,16 @@ auto command_help(char **argv) -> void {
     REB_USAGE();
 }
 
-auto command_init(char **argv) -> void {
+auto command_init(enviroment &env, char **argv) -> void {
     if (!*++argv) REB_PANIC("unexpected end of command");
-    context.Params = *argv;
+    env.params = *argv;
 
     fs::path modelFilePath{};
     for (const auto &dirEntry :
-         fs::recursive_directory_iterator(context.ConfigPath / "models"))
+         fs::recursive_directory_iterator(env.configPath / "models"))
         if (const auto fileName{dirEntry.path().string()};
             !dirEntry.is_directory() &&
-            fileName.ends_with(context.Params + ".json")) {
+            fileName.ends_with(env.params + ".json")) {
             modelFilePath = dirEntry.path();
             break;
         }
@@ -211,8 +210,8 @@ auto command_init(char **argv) -> void {
         REB_PANIC("cannot create snapshot folder");
 }
 
-auto command_compile() -> void {
-    auto &section = context.Config["compilation"s];
+auto command_compile(enviroment &env) -> void {
+    auto &section = env.configJson["compilation"s];
     if (section.is_null())
         REB_PANIC("missing field 'compilation' in config file");
     if (section["source"s].is_null())
@@ -228,8 +227,8 @@ auto command_compile() -> void {
 
     const auto hashList{get_hash()};
     std::vector<std::string> ignoreList{};
-    if (!context.Config["ignore"s].is_null())
-        for (const auto &entry : (json::array_t)context.Config["ignore"s])
+    if (!env.configJson["ignore"s].is_null())
+        for (const auto &entry : (json::array_t)env.configJson["ignore"s])
             ignoreList.push_back((std::string)entry);
 
     const auto source = regex_from_posix((std::string)section["source"s]);
@@ -280,8 +279,8 @@ auto command_compile() -> void {
     }
 }
 
-auto command_link() -> void {
-    auto &section = context.Config["linking"s];
+auto command_link(enviroment &env) -> void {
+    auto &section = env.configJson["linking"s];
     if (section.is_null()) REB_PANIC("missing field 'linking' in config file");
     if (section["source"s].is_null())
         REB_PANIC("missing field 'source' in config file");
@@ -300,8 +299,8 @@ auto command_link() -> void {
         REB_PANIC("cannot create destination folder");
 
     std::vector<std::string> ignoreList{};
-    if (!context.Config["ignore"s].is_null())
-        for (const auto &entry : (json::array_t)context.Config["ignore"s])
+    if (!env.configJson["ignore"s].is_null())
+        for (const auto &entry : (json::array_t)env.configJson["ignore"s])
             ignoreList.push_back((std::string)entry);
 
     auto command = (std::string)section["command"s];
@@ -334,8 +333,8 @@ auto command_link() -> void {
                   << "-- command: (" << command << ")");
 }
 
-auto command_post_compile() -> void {
-    auto &section = context.Config["post compile"s];
+auto command_post_compile(enviroment &env) -> void {
+    auto &section = env.configJson["post compile"s];
     if (section.is_null()) return;
 
     for (const auto &entry : (json::array_t)section) {
@@ -348,28 +347,28 @@ auto command_post_compile() -> void {
     }
 }
 
-auto command_run(char **argv) -> void {
+auto command_run(enviroment &env, char **argv) -> void {
     if (!*++argv) REB_PANIC("unexpected end of command");
 
-    context.Params = *argv;
+    env.params = *argv;
 
     REB_INFO("reading config file");
-    read_config();
+    read_config(env);
 
     REB_INFO("building the project");
-    command_compile();
-    command_link();
-    command_post_compile();
+    command_compile(env);
+    command_link(env);
+    command_post_compile(env);
 
     REB_INFO("writing files' hash");
-    write_hash();
+    write_hash(env);
 }
 
-auto command_clean(char **argv) -> void {
+auto command_clean(enviroment &env, char **argv) -> void {
     if (*++argv) REB_PANIC("unexpected parameter provided");
 
     REB_INFO("reading config file");
-    read_config(false);
+    read_config(env, false);
 
     const auto localConfig{fs::current_path() / ".reb"};
     if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
@@ -378,7 +377,7 @@ auto command_clean(char **argv) -> void {
     if (fs::exists(localConfig / "hash") && !fs::remove(localConfig / "hash"))
         REB_PANIC("cannot delete hash file");
 
-    for (auto &entry : (json::object_t)context.Config) {
+    for (auto &entry : (json::object_t)env.configJson) {
         auto &section = entry.second["compilation"s];
         if (section.is_null())
             REB_PANIC("missing field 'compilation' in config file");
@@ -404,19 +403,20 @@ auto command_clean(char **argv) -> void {
 int main(int argc, char **argv) {
     (void)argc;
 
-    context.ProgramName = *argv;
+    enviroment env{};
+    env.programName = *argv;
     if (!*++argv) REB_PANIC("unexpected end of command");
 
-    context.Command = *argv;
-    if (context.Command == "help")
+    env.command = *argv;
+    if (env.command == "help")
         command_help(argv);
-    else if (context.Command == "init")
-        command_init(argv);
-    else if (context.Command == "run")
-        command_run(argv);
-    else if (context.Command == "clean")
-        command_clean(argv);
-    else if (context.Command == "snap")
+    else if (env.command == "init")
+        command_init(env, argv);
+    else if (env.command == "run")
+        command_run(env, argv);
+    else if (env.command == "clean")
+        command_clean(env, argv);
+    else if (env.command == "snap")
         REB_NOT_IMPLEMENTED("Snap()");
 
     REB_INFO("command completed");

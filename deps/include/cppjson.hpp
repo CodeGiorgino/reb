@@ -1,12 +1,11 @@
-/*
- * Check https://github.com/CodeGiorgino/cppjson for the full implementation
- */
-
 #pragma once
 
+#include <compare>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
+#include <typeinfo>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -17,39 +16,50 @@ namespace json {
 struct json_node;
 
 /* Helper typedefs */
-typedef std::pair<std::string, json_node> entry_t;
-typedef std::vector<json_node> array_t;
-typedef std::unordered_map<std::string, json_node> object_t;
-typedef std::variant<void *, bool, int, float, std::shared_ptr<std::string>,
-                     std::shared_ptr<array_t>, std::shared_ptr<object_t>>
-    json_value;
+using entry_t = std::pair<std::string, json_node>;
+using array_t = std::vector<json_node>;
+using object_t = std::unordered_map<std::string, json_node>;
+using json_value =
+    std::variant<void *, bool, int, float, std::shared_ptr<std::string>,
+                 std::shared_ptr<array_t>, std::shared_ptr<object_t>>;
 
 /* Json definition */
 struct json_node final {
-    /* Constructors */
    public:
+    /* Constructor */
     json_node() noexcept;
+
+    /* Copy constructor */
     json_node(const bool &value) noexcept;
     json_node(const int &value) noexcept;
     json_node(const float &value) noexcept;
-    json_node(const char *value) noexcept;
     json_node(const std::string &value) noexcept;
     json_node(const array_t &value) noexcept;
     json_node(const object_t &value) noexcept;
-    json_node(const json_node &node) noexcept;
 
-    ~json_node() noexcept = default;
+    json_node(const json_node &other) noexcept = default;
+    auto operator=(const json_node &other) noexcept -> json_node & = default;
+
+    /* Move constructor */
+    json_node(bool &&value) noexcept;
+    json_node(int &&value) noexcept;
+    json_node(float &&value) noexcept;
+    json_node(std::string &&value) noexcept;
+    json_node(array_t &&value) noexcept;
+    json_node(object_t &&value) noexcept;
+
+    json_node(json_node &&other) noexcept = default;
+    auto operator=(json_node &&other) noexcept -> json_node & = default;
 
     /* Type cast overload */
    public:
-    operator bool() const;
-    operator int() const;
-    operator float() const;
-    operator std::string() const;
-    operator array_t() const;
-    operator object_t() const;
+    template <typename Tp>
+    operator Tp() const {
+        if (auto value = try_get_value<Tp>(); value.has_value())
+            return value.value();
+        throw std::bad_cast();
+    }
 
-    /* Operators overload */
    public:
     /**
      * @brief Access the specified object node
@@ -91,15 +101,6 @@ struct json_node final {
      */
     auto operator<<(const entry_t &entry) -> json_node &;
 
-    auto operator=(const json_node &node) noexcept -> json_node &;
-    auto operator=(const bool &value) noexcept -> json_node &;
-    auto operator=(const int &value) noexcept -> json_node &;
-    auto operator=(const float &value) noexcept -> json_node &;
-    auto operator=(const char *value) noexcept -> json_node &;
-    auto operator=(const std::string &value) noexcept -> json_node &;
-    auto operator=(const array_t &value) noexcept -> json_node &;
-    auto operator=(const object_t &value) noexcept -> json_node &;
-
     /* Function members */
    public:
     /**
@@ -125,6 +126,27 @@ struct json_node final {
      * @return If the value is set to null
      */
     auto is_null() const noexcept -> bool;
+
+    /**
+     * @brief Try to get the json_node value
+     *
+     * @tparam Tp The value to get
+     * @return The json_node value or std::nullopt
+     */
+    template <typename Tp>
+    auto try_get_value() const noexcept -> std::optional<Tp> {
+        static_assert(std::__detail::__variant::__exactly_once<
+                          Tp, bool, int, float, std::string, array_t, object_t>,
+                      "T must occur exactly once in json_value alternatives");
+
+        if constexpr (std::__detail::__variant::__exactly_once<Tp, bool, int,
+                                                               float>)
+            return std::get<Tp>(_value);
+        else
+            return *std::get<std::shared_ptr<Tp>>(_value);
+
+        return std::nullopt;
+    }
 
    private:
     /* The node value */
