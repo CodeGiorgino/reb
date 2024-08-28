@@ -1,6 +1,2 @@
-.git/*
-.reb/hash
-.reb/snap/*
-
 obj/*
 build/*

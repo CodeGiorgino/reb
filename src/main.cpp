@@ -1,12 +1,16 @@
+#include <bits/fs_fwd.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <ios>
 #include <iostream>
+#include <optional>
 #include <ostream>
 #include <regex>
 #include <sstream>
@@ -51,16 +55,6 @@ auto regex_from_posix(const std::string &source) noexcept -> std::string {
 }
 
 auto read_config(enviroment &env, bool from_model = true) -> void {
-    /* excluding the sub repositories */
-    env.configJson["ignore"s] = json::array_t{};
-    for (const auto &dirEntry :
-         fs::recursive_directory_iterator(fs::current_path())) {
-        if (dirEntry.is_directory() && dirEntry.path().stem() == ".reb" &&
-            dirEntry.path().parent_path() != fs::current_path())
-            env.configJson["ignore"s]
-                << json::json_node{dirEntry.path().parent_path() / "/*"};
-    }
-
     /* reading the config file */
     const auto localConfig{fs::current_path() / ".reb"};
     if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
@@ -75,23 +69,55 @@ auto read_config(enviroment &env, bool from_model = true) -> void {
 
     stream.close();
     env.configJson = json::parser::deserialize(configFile);
-    if (!from_model) return;
+    env.configJson["ignore"s] = json::array_t{};
 
-    /* reading the model */
-    env.configJson = env.configJson[env.params];
-    if (env.configJson.is_null()) REB_PANIC("the model is not defined");
-
-    /* reding the .rebignore file */
-    if (!fs::exists(fs::current_path() / ".rebignore")) return;
-    stream.open(fs::current_path() / ".rebignore");
-    if (!stream.is_open()) REB_PANIC("cannot open .rebignore file");
-
-    while (std::getline(stream, line)) {
-        if (line.empty()) continue;
-        env.configJson["ignore"s] << json::json_node{regex_from_posix(line)};
+    if (from_model) {
+        /* reading the model */
+        env.configJson = env.configJson[env.params];
+        if (env.configJson.is_null()) REB_PANIC("the model is not defined");
     }
 
-    stream.close();
+    /* reding the .rebignore file */
+    env.configJson["ignore"s] = json::array_t{};
+    if (fs::exists(fs::current_path() / ".rebignore")) {
+        stream.open(fs::current_path() / ".rebignore");
+        if (!stream.is_open()) REB_PANIC("cannot open .rebignore file");
+
+        while (std::getline(stream, line)) {
+            if (line.empty()) continue;
+            env.configJson["ignore"s]
+                << json::json_node{regex_from_posix(line)};
+        }
+
+        stream.close();
+    }
+
+    env.configJson["ignore"s] << json::json_node{"\\.git/.*"s}
+                              << json::json_node{"\\.reb/snap/.*"s}
+                              << json::json_node{"\\.reb/hash"s};
+
+    /* get the ignorelist */
+    std::vector<std::string> ignoreList{};
+    for (const auto &entry : (json::array_t)env.configJson["ignore"s])
+        ignoreList.push_back((std::string)entry);
+
+    /* excluding the sub repositories */
+    for (const auto &dirEntry :
+         fs::recursive_directory_iterator(fs::current_path())) {
+        if (dirEntry.is_directory() && dirEntry.path().stem() == ".reb" &&
+            dirEntry.path().parent_path() != fs::current_path() &&
+            std::none_of(
+                ignoreList.begin(), ignoreList.end(),
+                [dirEntry](const std::string &ignorePath) -> bool {
+                    return std::regex_search(
+                        dirEntry.path().string(),
+                        std::regex(
+                            (fs::current_path() / ignorePath).string(),
+                            std::regex::icase | std::regex_constants::grep));
+                }))
+            env.configJson["ignore"s] << json::json_node{
+                (dirEntry.path().parent_path() / "/.*").string()};
+    }
 }
 
 auto write_hash(enviroment &env) -> void {
@@ -105,9 +131,8 @@ auto write_hash(enviroment &env) -> void {
 
     /* get the ignorelist */
     std::vector<std::string> ignoreList{};
-    if (!env.configJson["ignore"s].is_null())
-        for (const auto &entry : (json::array_t)env.configJson["ignore"s])
-            ignoreList.push_back((std::string)entry);
+    for (const auto &entry : (json::array_t)env.configJson["ignore"s])
+        ignoreList.push_back((std::string)entry);
 
     /* writing files' hash */
     for (const auto &dirEntry :
@@ -194,9 +219,10 @@ auto command_init(enviroment &env, char **argv) -> void {
                       << "Remove the old configuration? [Y/n]: ";
             std::cin.get(input);
 
-            if (input == 'n')
-                REB_PANIC("cannot delete the old configuration");
-            else if (input == 'Y')
+            if (input == 'n') {
+                REB_INFO("keeping the current configuration");
+                return;
+            } else if (input == 'Y')
                 break;
         };
 
@@ -235,26 +261,26 @@ auto command_compile(enviroment &env) -> void {
 
     /* get the ignorelist */
     std::vector<std::string> ignoreList{};
-    if (!env.configJson["ignore"s].is_null())
-        for (const auto &entry : (json::array_t)env.configJson["ignore"s])
-            ignoreList.push_back((std::string)entry);
+    for (const auto &entry : (json::array_t)env.configJson["ignore"s])
+        ignoreList.push_back((std::string)entry);
 
     const auto source = regex_from_posix((std::string)section["source"s]);
     for (const auto &dirEntry :
          fs::recursive_directory_iterator(fs::current_path())) {
-        if (fs::is_directory(dirEntry) ||
+        if (!fs::is_regular_file(dirEntry.path()) ||
             !std::regex_search(
                 dirEntry.path().string(),
-                std::regex(source,
+                std::regex((fs::current_path() / source).string(),
                            std::regex::icase | std::regex_constants::grep)) ||
-            std::any_of(ignoreList.begin(), ignoreList.end(),
-                        [dirEntry](const std::string &ignorePath) -> bool {
-                            return std::regex_search(
-                                dirEntry.path().string(),
-                                std::regex(ignorePath,
-                                           std::regex::icase |
-                                               std::regex_constants::grep));
-                        }))
+            std::any_of(
+                ignoreList.begin(), ignoreList.end(),
+                [dirEntry](const std::string &ignorePath) -> bool {
+                    return std::regex_search(
+                        dirEntry.path().string(),
+                        std::regex(
+                            (fs::current_path() / ignorePath).string(),
+                            std::regex::icase | std::regex_constants::grep));
+                }))
             continue;
 
         std::stringstream hash;
@@ -313,9 +339,8 @@ auto command_link(enviroment &env) -> void {
 
     /* get the ignorelist */
     std::vector<std::string> ignoreList{};
-    if (!env.configJson["ignore"s].is_null())
-        for (const auto &entry : (json::array_t)env.configJson["ignore"s])
-            ignoreList.push_back((std::string)entry);
+    for (const auto &entry : (json::array_t)env.configJson["ignore"s])
+        ignoreList.push_back((std::string)entry);
 
     /* compose the linking command */
     auto command = (std::string)section["command"s];
@@ -329,13 +354,16 @@ auto command_link(enviroment &env) -> void {
 
     const auto source = regex_from_posix((std::string)section["source"s]);
     for (const auto &dirEntry :
-         fs::recursive_directory_iterator(fs::current_path()))
-        if (!dirEntry.is_directory() &&
-            std::regex_search(
+         fs::recursive_directory_iterator(fs::current_path())) {
+        if (!fs::is_regular_file(dirEntry.path()) ||
+            !std::regex_search(
                 dirEntry.path().string(),
-                std::regex{source, std::regex_constants::icase |
-                                       std::regex_constants::grep}))
-            command += " " + dirEntry.path().string();
+                std::regex((fs::current_path() / source).string(),
+                           std::regex::icase | std::regex_constants::grep)))
+            continue;
+
+        command += " " + dirEntry.path().string();
+    }
 
     if (!section["deps"s].is_null())
         for (const auto &entry : (json::array_t)section["deps"s])
@@ -388,16 +416,17 @@ auto command_clean(enviroment &env, char **argv) -> void {
     REB_INFO("reading config file");
     read_config(env, false);
 
-    const auto localConfig{fs::current_path() / ".reb"};
-    if (!fs::exists(localConfig)) REB_PANIC("not a reb repository");
-
     /* remove the hash file */
+    const auto localConfig{fs::current_path() / ".reb"};
     REB_INFO("cleaning the repository");
     if (fs::exists(localConfig / "hash") && !fs::remove(localConfig / "hash"))
         REB_PANIC("cannot delete hash file");
 
     /* remove the destination folders */
     for (auto &entry : (json::object_t)env.configJson) {
+        if (entry.second.try_get_value<json::object_t>() == std::nullopt)
+            continue;
+
         auto &section = entry.second["compilation"s];
         if (section.is_null())
             REB_PANIC("missing field 'compilation' in config file");
@@ -420,6 +449,113 @@ auto command_clean(enviroment &env, char **argv) -> void {
     }
 }
 
+auto command_snap(enviroment &env, char **argv) -> void {
+    REB_INFO("reading config file");
+    read_config(env, false);
+
+    const auto localConfig{fs::current_path() / ".reb"};
+
+    /* get the ignorelist */
+    std::vector<std::string> ignoreList{};
+    for (const auto &entry : (json::array_t)env.configJson["ignore"s])
+        ignoreList.push_back((std::string)entry);
+
+    if (const auto snapshotName = *++argv; snapshotName) {
+        /* revert to snapshot */
+        if (const auto snapshotPath =
+                fs::path{localConfig / "snap" / snapshotName};
+            !fs::exists(snapshotPath) ||
+            snapshotPath.parent_path().stem() != "snap")
+            REB_PANIC("cannot find snapshot '" << snapshotName << "'");
+
+        char input{};
+        while (true) {
+            std::cout << "\033[1G\033[K"
+                      << "Revert to the snapshot '" << snapshotName
+                      << "' (this operation cannot be undone)? [Y/n]: ";
+            std::cin.get(input);
+
+            if (input == 'n') {
+                REB_INFO("keeping the current repository state");
+                return;
+            } else if (input == 'Y')
+                break;
+        };
+
+        /* keep ignored files because not part of the snapshot */
+        for (const auto &dirEntry :
+             fs::recursive_directory_iterator(fs::current_path())) {
+            if (std::none_of(ignoreList.begin(), ignoreList.end(),
+                             [dirEntry](const std::string &ignorePath) -> bool {
+                                 return std::regex_search(
+                                     dirEntry.path().string(),
+                                     std::regex(
+                                         ignorePath,
+                                         std::regex::icase |
+                                             std::regex_constants::grep));
+                             })) {
+                fs::remove_all(dirEntry);
+            }
+        }
+
+        /* copy the snapshot recursively */
+        fs::copy(localConfig / "snap" / snapshotName, fs::current_path(),
+                 fs::copy_options::recursive);
+    }
+
+    else {
+        /* make snapshot */
+        if (!fs::exists(localConfig / "snap") &&
+            !fs::create_directory(localConfig / "snap"))
+            REB_PANIC("cannot create snapshot folder");
+
+        /* date as snapshot name */
+        const auto timeNow = std::time(nullptr);
+        const auto *timeInfo = std::localtime(&timeNow);
+
+        std::stringstream newSnapshotName{};
+        newSnapshotName << (timeInfo->tm_year + 1900) << std::setfill('0')
+                        << std::setw(2) << (timeInfo->tm_mon + 1)
+                        << std::setfill('0') << std::setw(2)
+                        << (timeInfo->tm_mday) << "-" << std::setfill('0')
+                        << std::setw(2) << timeInfo->tm_hour
+                        << std::setfill('0') << std::setw(2)
+                        << timeInfo->tm_min;
+        const auto snapshotPath = localConfig / "snap" / newSnapshotName.str();
+
+        if (fs::exists(snapshotPath) && !fs::remove_all(snapshotPath))
+            REB_PANIC("cannot delete snapshot '" << newSnapshotName.str()
+                                                 << "'");
+        if (!fs::create_directory(snapshotPath))
+            REB_PANIC("cannot create snapshot '" << newSnapshotName.str()
+                                                 << "'");
+
+        /* copy files */
+        for (const auto &dirEntry :
+             fs::recursive_directory_iterator(fs::current_path())) {
+            if (std::none_of(ignoreList.begin(), ignoreList.end(),
+                             [dirEntry](const std::string &ignorePath) -> bool {
+                                 return std::regex_search(
+                                     dirEntry.path().string(),
+                                     std::regex(
+                                         ignorePath,
+                                         std::regex::icase |
+                                             std::regex_constants::grep));
+                             })) {
+                if (fs::is_directory(dirEntry.path()))
+                    fs::create_directory(
+                        snapshotPath /
+                        fs::relative(dirEntry.path(), fs::current_path()));
+                else
+                    fs::copy_file(
+                        dirEntry.path(),
+                        snapshotPath /
+                            fs::relative(dirEntry.path(), fs::current_path()));
+            }
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     (void)argc;
 
@@ -437,7 +573,7 @@ int main(int argc, char **argv) {
     else if (env.command == "clean")
         command_clean(env, argv);
     else if (env.command == "snap")
-        REB_NOT_IMPLEMENTED("Snap()");
+        command_snap(env, argv);
 
     REB_INFO("command completed");
     return 0;
