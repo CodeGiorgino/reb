@@ -200,9 +200,9 @@ auto command_init(enviroment &env, char **argv) -> void {
     fs::path modelFilePath{};
     for (const auto &dirEntry :
          fs::recursive_directory_iterator(env.configPath / "models"))
-        if (!dirEntry.is_directory() &&
-            dirEntry.path().stem() == env.params + ".json") {
-            modelFilePath = dirEntry.path().string();
+        if (dirEntry.is_regular_file() &&
+            dirEntry.path().filename() == env.params + ".json") {
+            modelFilePath = dirEntry.path();
             break;
         }
 
